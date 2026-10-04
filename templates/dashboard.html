@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{{ device_name }} · MK Collector</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+  <script defer src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='dashboard.js') }}"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="product-mark" aria-hidden="true">MK</div>
+        <div>
+          <p class="product-name">MK Collector</p>
+          <div class="device-title"><h1>{{ device_name }}</h1><span>v0.2</span></div>
+          <p class="product-subtitle">RouterOS Telemetry</p>
+        </div>
+      </div>
+
+      <div class="health-panel">
+        <div id="status" class="status offline" role="status" aria-live="polite">
+          <span class="status-dot"></span>OFFLINE
+        </div>
+        <dl>
+          <div><dt>Last sample</dt><dd id="last-update">N/A</dd></div>
+          <div><dt>REST latency</dt><dd id="latency">N/A</dd></div>
+        </dl>
+      </div>
+    </header>
+
+    <section class="interface-grid" aria-label="Resumen de interfaces">
+      <article class="card interface-card" data-interface="ether1">
+        <header class="card-header interface-heading">
+          <div>
+            <span class="card-kicker">Client port</span>
+            <h2>ETHER1</h2>
+            <p>Customer-facing interface</p>
+          </div>
+          <span class="port-badge">CLIENT</span>
+        </header>
+
+        <div class="current-grid">
+          <div class="current-metric">
+            <span class="series-label"><i class="series-dot ether-rx"></i>RX CURRENT</span>
+            <strong id="ether1-rx-current">N/A</strong>
+          </div>
+          <div class="current-metric">
+            <span class="series-label"><i class="series-dot ether-tx"></i>TX CURRENT</span>
+            <strong id="ether1-tx-current">N/A</strong>
+          </div>
+        </div>
+
+        <div class="metric-details">
+          <div><span>RX peak</span><strong id="ether1-rx-peak">N/A</strong></div>
+          <div><span>TX peak</span><strong id="ether1-tx-peak">N/A</strong></div>
+          <div><span>RX average</span><strong id="ether1-rx-avg">N/A</strong></div>
+          <div><span>TX average</span><strong id="ether1-tx-avg">N/A</strong></div>
+        </div>
+
+        <div class="counter-row">
+          <div><span>Packets/s</span><strong id="ether1-pps">N/A</strong></div>
+          <div><span>Errors</span><strong id="ether1-errors">N/A</strong></div>
+          <div><span>Drops</span><strong id="ether1-drops">N/A</strong></div>
+        </div>
+      </article>
+
+      <article class="card interface-card" data-interface="sfp-sfpplus1">
+        <header class="card-header interface-heading">
+          <div>
+            <span class="card-kicker">Uplink</span>
+            <h2>SFP-SFPPLUS1</h2>
+            <p>Network uplink interface</p>
+          </div>
+          <span class="port-badge">SFP+</span>
+        </header>
+
+        <div class="current-grid">
+          <div class="current-metric">
+            <span class="series-label"><i class="series-dot sfp-rx"></i>RX CURRENT</span>
+            <strong id="sfp-rx-current">N/A</strong>
+          </div>
+          <div class="current-metric">
+            <span class="series-label"><i class="series-dot sfp-tx"></i>TX CURRENT</span>
+            <strong id="sfp-tx-current">N/A</strong>
+          </div>
+        </div>
+
+        <div class="metric-details">
+          <div><span>RX peak</span><strong id="sfp-rx-peak">N/A</strong></div>
+          <div><span>TX peak</span><strong id="sfp-tx-peak">N/A</strong></div>
+          <div><span>RX average</span><strong id="sfp-rx-avg">N/A</strong></div>
+          <div><span>TX average</span><strong id="sfp-tx-avg">N/A</strong></div>
+        </div>
+
+        <div class="counter-row">
+          <div><span>Packets/s</span><strong id="sfp-pps">N/A</strong></div>
+          <div><span>Errors</span><strong id="sfp-errors">N/A</strong></div>
+          <div><span>Drops</span><strong id="sfp-drops">N/A</strong></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="card chart-card">
+      <header class="chart-header">
+        <div>
+          <span class="card-kicker">Traffic analytics</span>
+          <h2>Throughput</h2>
+          <p>Interface traffic over selected window · <span id="window-title">Live 60 seconds</span></p>
+        </div>
+        <div class="window-tabs" role="group" aria-label="Ventana de tiempo">
+          <button class="active" type="button" data-window="live" aria-pressed="true">LIVE 60s</button>
+          <button type="button" data-window="20m" aria-pressed="false">20 MIN</button>
+          <button type="button" data-window="1h" aria-pressed="false">1 HORA</button>
+          <button type="button" data-window="2h" aria-pressed="false">2 HORAS</button>
+        </div>
+      </header>
+
+      <div class="chart-layout">
+        <div class="canvas-wrap">
+          <canvas id="traffic-chart" role="img" aria-label="Gráfica de tráfico RX y TX de ether1 y SFP"></canvas>
+          <div id="chart-empty" class="chart-empty">Esperando muestras</div>
+        </div>
+        <aside class="current-values" aria-label="Valores de tráfico actuales">
+          <div class="current-values-heading">
+            <span class="card-kicker">Live readings</span>
+            <h3>Current traffic</h3>
+          </div>
+          <div class="current-reading"><i class="series-dot ether-rx"></i><span>ETHER1 RX</span><strong id="side-ether-rx">N/A</strong></div>
+          <div class="current-reading"><i class="series-dot ether-tx"></i><span>ETHER1 TX</span><strong id="side-ether-tx">N/A</strong></div>
+          <div class="current-reading"><i class="series-dot sfp-rx"></i><span>SFP RX</span><strong id="side-sfp-rx">N/A</strong></div>
+          <div class="current-reading"><i class="series-dot sfp-tx"></i><span>SFP TX</span><strong id="side-sfp-tx">N/A</strong></div>
+          <p class="peak-note"><span>●</span> A discrete marker identifies each series peak.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="detail-grid">
+      <article class="card optical-card">
+        <header class="card-header">
+          <div>
+            <span class="card-kicker">SFP diagnostics</span>
+            <h2>Optical health</h2>
+          </div>
+          <span id="ddm-state" class="neutral-badge">N/A</span>
+        </header>
+        <div class="optical-list">
+          <div><span>Link</span><strong id="ddm-link">N/A</strong></div>
+          <div><span>Speed</span><strong id="ddm-rate">N/A</strong></div>
+          <div><span>Full duplex</span><strong id="ddm-duplex">N/A</strong></div>
+          <div><span>Temperature</span><strong id="ddm-temp">N/A</strong></div>
+          <div><span>Voltage</span><strong id="ddm-voltage">N/A</strong></div>
+          <div><span>TX bias</span><strong id="ddm-bias">N/A</strong></div>
+          <div><span>RX power</span><strong id="ddm-rx-power">N/A</strong></div>
+          <div><span>TX power</span><strong id="ddm-tx-power">N/A</strong></div>
+          <div><span>Vendor</span><strong id="ddm-vendor">N/A</strong></div>
+          <div><span>Model</span><strong id="ddm-model">N/A</strong></div>
+          <div><span>Wavelength</span><strong id="ddm-wavelength">N/A</strong></div>
+        </div>
+      </article>
+
+      <article class="card summary-card">
+        <header class="card-header">
+          <div>
+            <span class="card-kicker">SFP uplink</span>
+            <h2>Service summary</h2>
+            <p>Performance over the currently selected window</p>
+          </div>
+          <span id="summary-window" class="neutral-badge">LIVE 60s</span>
+        </header>
+
+        <div class="summary-grid">
+          <section class="summary-group summary-current" aria-labelledby="summary-current-title">
+            <div class="summary-group-heading">
+              <span class="summary-index">01</span>
+              <h3 id="summary-current-title">Current throughput</h3>
+            </div>
+            <div class="summary-primary-metric">
+              <span><i class="series-dot sfp-rx"></i>RX</span>
+              <strong id="summary-current-rx">N/A</strong>
+            </div>
+            <div class="summary-primary-metric">
+              <span><i class="series-dot sfp-tx"></i>TX</span>
+              <strong id="summary-current-tx">N/A</strong>
+            </div>
+            <dl class="utilization-list">
+              <div><dt>Link capacity</dt><dd id="summary-capacity">N/A</dd></div>
+              <div><dt>Current RX utilization</dt><dd id="summary-current-rx-util">N/A</dd></div>
+              <div><dt>Current TX utilization</dt><dd id="summary-current-tx-util">N/A</dd></div>
+            </dl>
+          </section>
+
+          <section class="summary-group" aria-labelledby="summary-average-title">
+            <div class="summary-group-heading">
+              <span class="summary-index">02</span>
+              <h3 id="summary-average-title">Average</h3>
+            </div>
+            <div class="summary-secondary-metric">
+              <span>RX AVG</span>
+              <strong id="summary-avg-rx">N/A</strong>
+            </div>
+            <div class="summary-secondary-metric">
+              <span>TX AVG</span>
+              <strong id="summary-avg-tx">N/A</strong>
+            </div>
+            <p class="summary-context">Exact statistics from collected samples.</p>
+          </section>
+
+          <section class="summary-group" aria-labelledby="summary-peak-title">
+            <div class="summary-group-heading">
+              <span class="summary-index">03</span>
+              <h3 id="summary-peak-title">Peak</h3>
+            </div>
+            <div class="summary-secondary-metric peak-metric">
+              <span>RX PEAK</span>
+              <strong id="summary-peak-rx">N/A</strong>
+              <small id="summary-peak-rx-time">N/A</small>
+            </div>
+            <div class="summary-secondary-metric peak-metric">
+              <span>TX PEAK</span>
+              <strong id="summary-peak-tx">N/A</strong>
+              <small id="summary-peak-tx-time">N/A</small>
+            </div>
+            <dl class="utilization-list compact">
+              <div><dt>Peak RX utilization</dt><dd id="summary-peak-rx-util">N/A</dd></div>
+              <div><dt>Peak TX utilization</dt><dd id="summary-peak-tx-util">N/A</dd></div>
+            </dl>
+          </section>
+
+          <section class="summary-group summary-quality" aria-labelledby="summary-quality-title">
+            <div class="summary-group-heading">
+              <span class="summary-index">04</span>
+              <h3 id="summary-quality-title">Link quality</h3>
+            </div>
+            <dl class="quality-list">
+              <div><dt>Errors</dt><dd id="summary-errors">N/A</dd></div>
+              <div><dt>Drops</dt><dd id="summary-drops">N/A</dd></div>
+              <div><dt>Collection gaps</dt><dd id="summary-gaps">N/A</dd></div>
+            </dl>
+            <div class="quality-window">
+              <span>Window</span>
+              <strong id="summary-window-detail">LIVE 60s</strong>
+            </div>
+          </section>
+        </div>
+      </article>
+    </section>
+
+    <footer>
+      <span id="footer-status">Collector iniciando…</span>
+      <span>Read only · RouterOS REST</span>
+    </footer>
+  </main>
+</body>
+</html>

@@ -7,103 +7,173 @@
 ![Flask 3.x](https://img.shields.io/badge/Flask-3.x-111827?logo=flask&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-short--term-003B57?logo=sqlite&logoColor=white)
 ![Chart.js 4.5.1](https://img.shields.io/badge/Chart.js-4.5.1-FF6384?logo=chartdotjs&logoColor=white)
-![WireGuard](https://img.shields.io/badge/WireGuard-recommended-88171A?logo=wireguard&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-passing-2E7D32)
-![Status](https://img.shields.io/badge/status-lab%20validated-4B5563)
+![WireGuard](https://img.shields.io/badge/WireGuard-supported-88171A?logo=wireguard&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-18%2F18%20passing-2E7D32)
+![Status](https://img.shields.io/badge/status-production%20validated-2E7D32)
 
-A lightweight telemetry collector for MikroTik RouterOS v7, focused on real-time interface throughput, SFP/DDM optical metrics, short-term history, and a modern web dashboard.
+A lightweight telemetry collector for **MikroTik RouterOS v7**, focused on real-time interface throughput, SFP/DDM optical metrics, short-term history, and a modern web dashboard.
 
-MK-Collector is a specialized observability project and functional lab foundation. It is not intended to replace a full NMS such as PRTG or The Dude.
+MK-Collector provides a focused observability layer for MikroTik-based service links without attempting to replace a complete NMS platform.
 
-[Changelog](CHANGELOG.md) · [Architecture](docs/diagrams/architecture.md) · [Deployment topology](docs/diagrams/topology.md)
+[Changelog](CHANGELOG.md) · [Architecture](docs/diagrams/architecture.md) · [Deployment topology](docs/diagrams/topology.md) · [Data flow](docs/diagrams/data-flow.md)
 
-## Contents
+![MK-Collector Dashboard](docs/screenshots/dashboard-main.png)
 
-- [What is MK-Collector?](#what-is-mk-collector)
-- [Why it exists](#why-it-exists)
-- [Key features](#key-features)
-- [Architecture](#architecture)
-- [Recommended topology](#recommended-topology)
-- [How it works](#how-it-works)
-- [Metrics collected](#metrics-collected)
-- [Historical windows](#historical-windows)
-- [Screenshots](#screenshots)
-- [Quick start](#quick-start)
-- [Configuration](#configuration)
-- [Security model](#security-model)
-- [API endpoints](#api-endpoints)
-- [Project structure](#project-structure)
-- [Validation status](#validation-status)
-- [Testing](#testing)
-- [Use cases](#use-cases)
-- [Limitations](#limitations)
-- [Roadmap](#roadmap)
-- [License](#license)
+---
 
 ## What is MK-Collector?
 
-MK-Collector is a small Python and Flask service that polls the RouterOS REST API for two monitored interfaces, keeps a 60-sample live view in memory, stores valid samples in SQLite, and exposes the data to a responsive Chart.js dashboard.
+MK-Collector is a Python and Flask service that polls the **RouterOS REST API**, normalizes interface telemetry, stores valid samples in SQLite, and exposes the resulting data through a responsive Chart.js dashboard.
 
 The current implementation monitors:
 
-- A configurable physical customer interface, exposed internally through the compatibility key `ether1`.
-- A configurable physical uplink and SFP/DDM interface, exposed internally as `sfp-sfpplus1`.
+- A configurable physical customer-facing interface.
+- A configurable physical uplink / SFP interface.
+- Real-time RX/TX throughput.
+- Packet rates, errors and drops.
+- SFP/DDM optical health.
+- Short-term historical traffic.
+- Current, average, minimum and peak statistics.
 
-Physical interface defaults are `ether1` and `sfp-sfpplus1`. For example, setting `CUSTOMER_INTERFACE=ether4` changes the RouterOS request without changing API, SQLite, statistics, or frontend keys.
+Physical RouterOS interface names are configurable through `.env` while the internal API and storage contract remains stable.
 
-The browser communicates only with Flask. RouterOS credentials never reach frontend code.
+For example:
+
+```env
+CUSTOMER_INTERFACE=ether4
+UPLINK_INTERFACE=sfp-sfpplus1
+```
+
+can be used without changing frontend, API or database keys.
+
+The browser communicates only with Flask. RouterOS communication remains backend-side.
+
+---
 
 ## Why it exists
 
-The project provides a focused way to inspect service throughput and optical health without deploying a complete network management platform. It is useful for controlled labs, troubleshooting, demonstrations, and as an extensible base for broader observability work.
+MK-Collector was built for cases where a complete NMS is unnecessary but operators still need immediate visibility into:
+
+- service throughput,
+- customer-facing ports,
+- uplink utilization,
+- optical health,
+- short-term traffic behavior,
+- and recent peaks or anomalies.
+
+It has been validated in both laboratory and production environments against MikroTik RouterOS devices.
+
+---
 
 ## Key features
 
-- Near-real-time RX/TX collection at a configurable interval; one second by default.
-- SFP/DDM polling at a configurable interval; five seconds by default.
-- Live status, last valid sample, REST latency, gaps, and automatic recovery after transient failures.
-- Short-term SQLite persistence with automatic retention cleanup.
-- Live and historical views without full-page reloads.
-- Raw-window statistics and peak-preserving historical downsampling.
-- Responsive dashboard with four independently toggleable traffic series.
-- Explicit RouterOS monitor-endpoint allowlist; no write or configuration endpoints.
-- Locally vendored Chart.js for operation without an Internet dependency.
+- Near-real-time RX/TX collection.
+- Configurable RouterOS physical interfaces.
+- SFP/DDM telemetry.
+- Current, average, minimum and peak statistics.
+- Short-term SQLite persistence.
+- Live and historical chart windows.
+- Peak-preserving historical downsampling.
+- Collection gap handling without synthetic zero samples.
+- Automatic recovery after transient RouterOS failures.
+- Responsive web dashboard.
+- Local Chart.js dependency.
+- Strict read-only RouterOS endpoint allowlist.
+- WireGuard-compatible remote deployments.
+- No SNMP dependency.
+
+---
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    ROS[MikroTik RouterOS v7] -->|REST monitor calls| WORKERS[Collector workers]
-    WORKERS --> LIVE[Live state<br/>60 samples]
-    WORKERS --> DB[(SQLite<br/>short-term history)]
-    LIVE --> API[Flask API]
+    ROS[MikroTik RouterOS v7]
+    COL[MK-Collector]
+    LIVE[Live State]
+    DB[(SQLite)]
+    API[Flask API]
+    UI[Web Dashboard]
+
+    ROS -->|REST monitor calls| COL
+    COL --> LIVE
+    COL --> DB
+    LIVE --> API
     DB --> API
-    API --> UI[Web dashboard<br/>Chart.js]
+    API --> UI
 ```
 
-See the detailed [architecture diagram](docs/diagrams/architecture.md) and [component map](docs/diagrams/components.md).
+Detailed documentation:
+
+- [Architecture](docs/diagrams/architecture.md)
+- [Application components](docs/diagrams/components.md)
+- [Deployment topology](docs/diagrams/topology.md)
+- [Telemetry data flow](docs/diagrams/data-flow.md)
+
+---
 
 ## Recommended topology
 
-Run MK-Collector on a Linux or Python-capable management host. Reach the MikroTik management plane through a private network, preferably a WireGuard tunnel.
+MK-Collector can run on any Linux or Python-capable management host with IP connectivity to RouterOS.
+
+For remote deployments, WireGuard provides a simple way to keep RouterOS management traffic away from the public Internet.
 
 ```text
-Browser ──localhost── Collector host ──WireGuard── MikroTik RouterOS
+Browser
+   │
+   ▼
+MK-Collector Host
+   │
+   │ WireGuard / private management network
+   ▼
+MikroTik RouterOS
+   │
+   ├── Customer interface
+   └── SFP / uplink
 ```
 
-WireGuard is transport only: MK-Collector does not create, configure, or manage the tunnel. RouterOS REST must not be exposed directly to the public Internet. See the [deployment topology](docs/diagrams/topology.md).
+WireGuard is transport only. MK-Collector does not create or manage the tunnel itself.
+
+---
 
 ## How it works
 
-1. `config.py` loads configuration from `.env`.
-2. `app.py` initializes SQLite and starts separate traffic and DDM workers.
-3. The traffic worker calls `interface/monitor-traffic` for the configured physical interfaces and maps them to logical `ether1` and `sfp-sfpplus1` keys.
-4. The DDM worker calls `interface/ethernet/monitor` for the configured physical uplink.
-5. Valid samples update the in-memory state and are persisted to SQLite.
-6. Failed traffic requests create an in-memory gap; they do not insert artificial zeroes.
-7. The dashboard polls `/api/state` and requests historical windows from `/api/history`.
+1. `config.py` loads runtime settings from `.env`.
+2. `app.py` initializes the application and SQLite database.
+3. Independent workers collect traffic and SFP/DDM data.
+4. The traffic worker calls `interface/monitor-traffic`.
+5. Physical RouterOS interfaces are mapped to stable internal interface keys.
+6. The DDM worker calls `interface/ethernet/monitor`.
+7. Valid samples update live state and are persisted to SQLite.
+8. Failed traffic requests create gaps instead of artificial zero values.
+9. The dashboard reads current data from `/api/state`.
+10. Historical windows are retrieved from `/api/history`.
 
-RouterOS exposes these monitor commands through REST `POST` requests, but the operations used by MK-Collector are read-only. See the [data-flow sequence](docs/diagrams/data-flow.md).
+```mermaid
+sequenceDiagram
+    participant ROS as RouterOS
+    participant COL as Collector
+    participant DB as SQLite
+    participant UI as Dashboard
+
+    COL->>ROS: monitor-traffic
+    ROS-->>COL: RX/TX, PPS, errors, drops
+
+    COL->>ROS: ethernet monitor
+    ROS-->>COL: Link + SFP/DDM
+
+    COL->>DB: Persist valid samples
+
+    UI->>COL: GET /api/state
+    COL-->>UI: Current telemetry
+
+    UI->>COL: GET /api/history
+    COL->>DB: Query historical samples
+    DB-->>COL: Historical data
+    COL-->>UI: Downsampled series + statistics
+```
+
+---
 
 ## Metrics collected
 
@@ -117,144 +187,235 @@ RouterOS exposes these monitor commands through REST `POST` requests, but the op
 | Errors | `rx-errors-per-second`, `tx-errors-per-second` |
 | Drops | `rx-drops-per-second`, `tx-drops-per-second`, `tx-queue-drops-per-second` |
 
-### SFP/DDM
+### SFP / DDM
 
 | Category | Values |
 | --- | --- |
 | Link | Status, negotiated rate, full duplex |
 | Electrical | Temperature, supply voltage, TX bias current |
-| Optical | RX power and TX power |
-| Module identity | Vendor, model/part number, wavelength when supplied by RouterOS |
+| Optical | RX power, TX power |
+| Module | Vendor, part number, wavelength, module metadata when available |
 
-Missing RouterOS fields remain missing and are displayed as `N/A`; the collector does not invent optical values.
+Missing RouterOS values are represented as `N/A`.
+
+---
 
 ## Historical windows
 
 | Dashboard window | Source | Response bucket | Statistics |
 | --- | --- | ---: | --- |
-| LIVE 60s | In-memory buffer | Raw samples | Current, min, max, average |
+| LIVE 60s | Memory | Raw samples | Current, min, max, average |
 | 20 MIN | SQLite | 3 seconds | Raw-window statistics |
 | 1 HOUR | SQLite | 5 seconds | Raw-window statistics |
 | 2 HOURS | SQLite | 10 seconds | Raw-window statistics |
 
-SQLite keeps raw valid samples for **3 hours by default**. `HISTORY_RETENTION_HOURS` is configurable but must be at least 2. Cleanup runs approximately every five minutes while collection is active.
+SQLite stores raw valid samples for **3 hours by default**.
 
-Historical responses downsample chart points, while current/min/max/average and peak timestamps are calculated from raw rows. Real peaks are therefore preserved even when fewer points are sent to the browser.
+Historical chart responses are downsampled for frontend efficiency, while statistics and peak timestamps are calculated from raw database rows.
+
+This preserves real peaks even when the browser receives fewer chart points.
+
+---
 
 ## Screenshots
 
-Screenshots are intentionally left for the repository owner to add from the target lab environment.
+### Main dashboard
 
-| View | Suggested path |
-| --- | --- |
-| Main dashboard | `docs/screenshots/dashboard.png` |
-| Live throughput | `docs/screenshots/live-throughput.png` |
-| Historical view | `docs/screenshots/history.png` |
-| Optical / DDM view | `docs/screenshots/optical-ddm.png` |
+![Main Dashboard](docs/screenshots/dashboard-main.png)
 
-<!-- Add image links here after the corresponding files have been captured. -->
+### Live throughput
+
+![Live Throughput](docs/screenshots/live-throughput.png)
+
+### Historical traffic
+
+![Historical View](docs/screenshots/historical-view.png)
+
+### Optical health / SFP DDM
+
+![Optical Health](docs/screenshots/optical-health.png)
+
+---
 
 ## Quick start
 
 ### Requirements
 
-- Python 3.10 or newer.
-- MikroTik RouterOS v7 with REST access enabled.
-- A dedicated RouterOS user with only the permissions required for monitor operations.
-- Private management connectivity; WireGuard is recommended.
+- Python 3.10+
+- MikroTik RouterOS v7
+- RouterOS REST access
+- Network reachability to the management interface
+
+Clone the repository:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Y4el-Waka/MK-Collector.git
 cd MK-Collector
+```
+
+Create the environment:
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+Create the runtime configuration:
+
+```bash
 cp .env.example .env
 ```
 
-Edit `.env`, then start the collector:
+Start the collector:
 
 ```bash
 python app.py
 ```
 
-Open [http://127.0.0.1:5000](http://127.0.0.1:5000). The development server intentionally binds to localhost only.
+Open:
+
+```text
+http://127.0.0.1:5000
+```
+
+---
 
 ## Configuration
 
-All runtime configuration remains in `.env`.
+Runtime settings are loaded from `.env`.
 
 | Variable | Required | Default / example | Purpose |
 | --- | :---: | --- | --- |
-| `MIKROTIK_URL` | Yes | `http://192.0.2.1` | RouterOS base URL; replace the documentation address and do not append `/rest` |
-| `MIKROTIK_USER` | Yes | `collector` | Dedicated RouterOS username |
-| `MIKROTIK_PASS` | Yes | `CHANGE_ME` | RouterOS password; startup rejects an empty value |
-| `CUSTOMER_INTERFACE` | No | `ether1` | Physical RouterOS customer interface mapped to logical `ether1` |
-| `UPLINK_INTERFACE` | No | `sfp-sfpplus1` | Physical uplink used for traffic and DDM, mapped to logical `sfp-sfpplus1` |
+| `MIKROTIK_URL` | Yes | `http://192.0.2.1` | RouterOS base URL |
+| `MIKROTIK_USER` | Yes | `collector` | RouterOS collector account |
+| `MIKROTIK_PASS` | Yes | `CHANGE_ME` | RouterOS account password |
+| `CUSTOMER_INTERFACE` | No | `ether1` | Physical customer-facing RouterOS interface |
+| `UPLINK_INTERFACE` | No | `sfp-sfpplus1` | Physical uplink / DDM interface |
 | `TRAFFIC_INTERVAL` | No | `1` | Traffic polling interval in seconds |
 | `DDM_INTERVAL` | No | `5` | SFP/DDM polling interval in seconds |
-| `HISTORY_RETENTION_HOURS` | No | `3` | SQLite retention; minimum value is 2 |
-| `ROUTEROS_TIMEOUT` | No | `4` | HTTP request timeout in seconds |
-| `DEVICE_NAME` | No | `EXAMPLE-ROUTER` | Display and database device identity |
-| `DATABASE_PATH` | No | `mk_collector.sqlite3` beside the app | Optional SQLite path override |
+| `HISTORY_RETENTION_HOURS` | No | `3` | SQLite retention |
+| `ROUTEROS_TIMEOUT` | No | `4` | REST request timeout |
+| `DEVICE_NAME` | No | `EXAMPLE-ROUTER` | Device label used by the application |
+| `DATABASE_PATH` | No | `mk_collector.sqlite3` | SQLite database path |
 
-The values in `.env.example` are safe documentation examples. Replace `192.0.2.1` with the router's private or WireGuard management address and do not commit the populated `.env` file.
+Example:
+
+```env
+MIKROTIK_URL=http://10.77.77.1
+MIKROTIK_USER=collector
+MIKROTIK_PASS=CHANGE_ME
+
+CUSTOMER_INTERFACE=ether1
+UPLINK_INTERFACE=sfp-sfpplus1
+
+TRAFFIC_INTERVAL=1
+DDM_INTERVAL=5
+HISTORY_RETENTION_HOURS=3
+
+DEVICE_NAME=LAB-ROUTER
+DATABASE_PATH=mk_collector.sqlite3
+```
+
+---
 
 ## Security model
 
-- Create a dedicated RouterOS collector account with only the permissions needed for the two monitor commands.
-- The client allowlist accepts only `interface/monitor-traffic` and `interface/ethernet/monitor`.
-- No Flask endpoint changes RouterOS configuration.
-- Credentials stay in `.env`; they are not returned by the API or embedded in frontend assets.
-- Restrict RouterOS `www` or `www-ssl` to the collector host or WireGuard management subnet.
-- Do not expose RouterOS REST directly to the Internet.
-- Use plain HTTP only inside a trusted private network or encrypted tunnel. Use `www-ssl` and certificate validation when end-to-end TLS is required.
-- The dashboard has no application-level authentication and binds to `127.0.0.1`; use an authenticated reverse proxy before controlled remote exposure.
+MK-Collector is designed around read-only RouterOS telemetry.
 
-Never commit `.env`, SQLite databases, packet captures, or lab exports containing credentials or infrastructure details.
+- RouterOS access is performed through a dedicated collector account.
+- The RouterOS client allows only:
+  - `interface/monitor-traffic`
+  - `interface/ethernet/monitor`
+- MK-Collector does not expose RouterOS configuration operations.
+- RouterOS credentials remain backend-side.
+- Management access can be transported through WireGuard or another private management network.
+- The Flask development instance binds to localhost by default.
+- Remote exposure can be placed behind an authenticated reverse proxy.
+
+---
 
 ## API endpoints
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `GET` | `/` | Dashboard HTML |
-| `GET` | `/api/state` | Current status, latest metrics, DDM, 60-sample buffer, and live statistics |
-| `GET` | `/api/history?window=20m` | 20-minute history with 3-second buckets |
-| `GET` | `/api/history?window=1h` | 1-hour history with 5-second buckets |
-| `GET` | `/api/history?window=2h` | 2-hour history with 10-second buckets |
+| `GET` | `/` | Dashboard |
+| `GET` | `/api/state` | Current telemetry, DDM, live buffer and statistics |
+| `GET` | `/api/history?window=20m` | 20-minute history |
+| `GET` | `/api/history?window=1h` | 1-hour history |
+| `GET` | `/api/history?window=2h` | 2-hour history |
 
-An unsupported history window returns HTTP `400`. API responses use `Cache-Control: no-store`.
+Unsupported historical windows return HTTP `400`.
+
+---
 
 ## Project structure
 
 ```text
 MK-Collector/
-├── app.py                     # Flask routes and service lifecycle
-├── collector.py               # RouterOS client, normalization, state, workers
-├── config.py                  # .env-backed settings
-├── database.py                # SQLite, retention, history, downsampling
+├── app.py
+├── collector.py
+├── config.py
+├── database.py
 ├── requirements.txt
-├── templates/dashboard.html
+├── .env.example
+├── README.md
+├── README.es.md
+├── CHANGELOG.md
+├── LICENSE
+│
+├── templates/
+│   └── dashboard.html
+│
 ├── static/
 │   ├── dashboard.css
 │   ├── dashboard.js
-│   └── vendor/                # Vendored Chart.js and license
-├── tests/                     # Python unittest suite
+│   └── vendor/
+│       ├── chart.umd.min.js
+│       └── CHARTJS-LICENSE.md
+│
+├── tests/
+│   ├── test_app.py
+│   ├── test_collector.py
+│   ├── test_config.py
+│   └── test_database.py
+│
 └── docs/
     ├── diagrams/
+    │   ├── architecture.md
+    │   ├── components.md
+    │   ├── data-flow.md
+    │   └── topology.md
+    │
     └── screenshots/
+        ├── dashboard-main.png
+        ├── live-throughput.png
+        ├── historical-view.png
+        └── optical-health.png
 ```
+
+---
 
 ## Validation status
 
 | Area | Status |
 | --- | --- |
-| `implementation_complete` | Complete for the documented v0.2 scope |
-| Automated tests | Passing in the current repository audit |
-| `validated_against_real_routeros` | Partial, controlled RouterOS v7 lab validation reported by the project owner |
-| Production validation | Not completed |
+| Implementation | Complete for the current v0.2 scope |
+| Automated testing | **18 / 18 passing** |
+| RouterOS laboratory validation | Passed |
+| WireGuard remote operation | Passed |
+| Real RouterOS REST telemetry | Passed |
+| Traffic collection | Passed |
+| SFP/DDM collection | Passed |
+| SQLite persistence | Passed |
+| Historical windows | Passed |
+| Production deployment validation | **Passed** |
 
-This documentation pass did not independently connect to a real router and does not claim production readiness.
+MK-Collector has been validated against real MikroTik RouterOS hardware in both controlled laboratory and production service environments.
+
+Production validation included real interface telemetry, SFP/DDM data collection, remote connectivity, persistence, historical visualization, and dashboard operation.
+
+---
 
 ## Testing
 
@@ -262,45 +423,76 @@ The project uses Python's built-in `unittest` framework.
 
 ```bash
 python -m unittest discover -s tests -v
-python -m compileall -q app.py collector.py config.py database.py tests
 ```
 
-The suite covers normalization, conversions, missing values, REST failures, the read-only allowlist, live gaps, worker recovery, SQLite insert/query/cleanup, statistics, peak-preserving downsampling, and history windows.
+Additional validation:
+
+```bash
+python -m compileall -q app.py collector.py config.py database.py tests
+node --check static/dashboard.js
+```
+
+The test suite covers:
+
+- traffic normalization,
+- unit conversion,
+- configurable interface mapping,
+- missing DDM values,
+- REST failures,
+- endpoint allowlisting,
+- live gaps,
+- worker recovery,
+- SQLite persistence,
+- retention cleanup,
+- statistics,
+- peak-preserving downsampling,
+- historical windows.
+
+---
 
 ## Use cases
 
-- Validate throughput and directionality in a controlled network lab.
-- Observe a client port and SFP uplink during service tests.
-- Check optical health alongside traffic without a full NMS deployment.
-- Demonstrate RouterOS REST, short-term persistence, and frontend visualization.
-- Use as a focused base for a broader observability integration.
+- Real-time monitoring of MikroTik service links.
+- Customer-facing interface observation.
+- Uplink utilization analysis.
+- Optical health monitoring.
+- Short-term troubleshooting.
+- Remote monitoring over private management networks.
+- Service validation during provisioning or troubleshooting.
+- Lightweight observability where a full NMS is unnecessary.
+- Building block for larger monitoring platforms.
 
-External RouterOS Bandwidth Test may generate laboratory traffic, but it is not part of MK-Collector and the collector does not depend on it.
+---
 
 ## Limitations
 
 - One RouterOS target per process.
-- Logical API/storage keys remain fixed to `ether1` and `sfp-sfpplus1`; physical RouterOS names are configurable through `.env`.
-- SQLite history is intentionally short-term; no long-term time-series backend is included.
-- DDM samples are persisted, but the current historical API and dashboard windows expose traffic history only.
-- No alerting engine, multi-user authentication, or role-based access control.
-- No SNMP adapter; all current device telemetry comes from RouterOS REST.
-- Historical failures are not persisted as database events, so historical gap counts are unavailable.
-- DDM field availability depends on the interface, transceiver, and RouterOS response.
-- Error/drop summaries use observed per-second monitor values; they are not cumulative RouterOS counters.
-- Production-scale and long-duration validation remain pending.
+- Internal logical interface keys remain stable while physical RouterOS interface names are configurable.
+- SQLite is intended for short-term telemetry rather than long-term time-series retention.
+- Historical dashboard views currently focus on traffic telemetry.
+- No built-in alerting engine.
+- No multi-user authentication or RBAC.
+- No SNMP adapter.
+- DDM availability depends on the installed transceiver and RouterOS support.
+- Error and drop values reflect RouterOS monitor output rather than cumulative counters.
+
+---
 
 ## Roadmap
 
-Potential future work, not implemented today:
+Potential future work:
 
+- Multi-device support.
+- Multi-service monitoring.
+- Remote collector agents.
+- Long-term time-series storage.
+- Alerting and health endpoints.
+- CSV / JSON / PDF reporting and exports.
+- Authentication and role-based access.
 - Optional SNMP adapter.
-- Configurable interfaces, multiple devices, and multiple services.
-- Remote collectors and long-term time-series storage.
-- Alerts and health-check endpoints.
-- Report and data export workflows.
-- Authentication and role-based access for shared deployments.
 - Integration with larger observability platforms.
+
+---
 
 ## License
 

@@ -46,8 +46,10 @@ MK-Collector is a small Python and Flask service that polls the RouterOS REST AP
 
 The current implementation monitors:
 
-- `ether1` as the client-facing interface.
-- `sfp-sfpplus1` as the uplink and SFP/DDM source.
+- A configurable physical customer interface, exposed internally through the compatibility key `ether1`.
+- A configurable physical uplink and SFP/DDM interface, exposed internally as `sfp-sfpplus1`.
+
+Physical interface defaults are `ether1` and `sfp-sfpplus1`. For example, setting `CUSTOMER_INTERFACE=ether4` changes the RouterOS request without changing API, SQLite, statistics, or frontend keys.
 
 The browser communicates only with Flask. RouterOS credentials never reach frontend code.
 
@@ -95,8 +97,8 @@ WireGuard is transport only: MK-Collector does not create, configure, or manage 
 
 1. `config.py` loads configuration from `.env`.
 2. `app.py` initializes SQLite and starts separate traffic and DDM workers.
-3. The traffic worker calls `interface/monitor-traffic` for both interfaces.
-4. The DDM worker calls `interface/ethernet/monitor` for `sfp-sfpplus1`.
+3. The traffic worker calls `interface/monitor-traffic` for the configured physical interfaces and maps them to logical `ether1` and `sfp-sfpplus1` keys.
+4. The DDM worker calls `interface/ethernet/monitor` for the configured physical uplink.
 5. Valid samples update the in-memory state and are persisted to SQLite.
 6. Failed traffic requests create an in-memory gap; they do not insert artificial zeroes.
 7. The dashboard polls `/api/state` and requests historical windows from `/api/history`.
@@ -184,17 +186,19 @@ All runtime configuration remains in `.env`.
 
 | Variable | Required | Default / example | Purpose |
 | --- | :---: | --- | --- |
-| `MIKROTIK_URL` | Yes | `http://192.168.250.2` | RouterOS base URL; no trailing `/rest` |
+| `MIKROTIK_URL` | Yes | `http://192.0.2.1` | RouterOS base URL; replace the documentation address and do not append `/rest` |
 | `MIKROTIK_USER` | Yes | `collector` | Dedicated RouterOS username |
 | `MIKROTIK_PASS` | Yes | `CHANGE_ME` | RouterOS password; startup rejects an empty value |
+| `CUSTOMER_INTERFACE` | No | `ether1` | Physical RouterOS customer interface mapped to logical `ether1` |
+| `UPLINK_INTERFACE` | No | `sfp-sfpplus1` | Physical uplink used for traffic and DDM, mapped to logical `sfp-sfpplus1` |
 | `TRAFFIC_INTERVAL` | No | `1` | Traffic polling interval in seconds |
 | `DDM_INTERVAL` | No | `5` | SFP/DDM polling interval in seconds |
 | `HISTORY_RETENTION_HOURS` | No | `3` | SQLite retention; minimum value is 2 |
 | `ROUTEROS_TIMEOUT` | No | `4` | HTTP request timeout in seconds |
-| `DEVICE_NAME` | No | `DP-PRUEBAS` | Display and database device identity |
+| `DEVICE_NAME` | No | `EXAMPLE-ROUTER` | Display and database device identity |
 | `DATABASE_PATH` | No | `mk_collector.sqlite3` beside the app | Optional SQLite path override |
 
-The values in `.env.example` are private-network examples only. Do not commit the populated `.env` file.
+The values in `.env.example` are safe documentation examples. Replace `192.0.2.1` with the router's private or WireGuard management address and do not commit the populated `.env` file.
 
 ## Security model
 
@@ -276,7 +280,7 @@ External RouterOS Bandwidth Test may generate laboratory traffic, but it is not 
 ## Limitations
 
 - One RouterOS target per process.
-- Interface names are fixed to `ether1` and `sfp-sfpplus1`.
+- Logical API/storage keys remain fixed to `ether1` and `sfp-sfpplus1`; physical RouterOS names are configurable through `.env`.
 - SQLite history is intentionally short-term; no long-term time-series backend is included.
 - DDM samples are persisted, but the current historical API and dashboard windows expose traffic history only.
 - No alerting engine, multi-user authentication, or role-based access control.

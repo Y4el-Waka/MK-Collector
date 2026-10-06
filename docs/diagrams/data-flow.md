@@ -17,11 +17,11 @@ sequenceDiagram
     participant D as Dashboard
 
     loop Every 1 second by default
-        T->>R: POST /rest/interface/monitor-traffic<br/>ether1,sfp-sfpplus1 · once
+        T->>R: POST /rest/interface/monitor-traffic<br/>configured customer,uplink · once
         alt Valid traffic response
             R-->>T: Traffic JSON
             T->>S: Insert valid interface samples
-            T->>L: Store current values and latency
+            T->>L: Map physical names to logical keys<br/>ether1 and sfp-sfpplus1
         else Timeout, HTTP, JSON, or storage failure
             T->>L: Record offline state and gap
             Note over T,S: No artificial zero is inserted
@@ -46,7 +46,7 @@ sequenceDiagram
     participant S as SQLite
 
     loop Every 5 seconds by default
-        O->>R: POST /rest/interface/ethernet/monitor<br/>sfp-sfpplus1 · once
+        O->>R: POST /rest/interface/ethernet/monitor<br/>configured uplink · once
         alt DDM data available
             R-->>O: Ethernet monitor JSON
             O->>S: Insert DDM sample

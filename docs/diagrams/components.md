@@ -27,7 +27,7 @@ flowchart TB
 | Component | Responsibility |
 | --- | --- |
 | `app.py` | Creates Flask, initializes storage, exposes `/`, `/api/state`, and `/api/history`, and owns service startup/shutdown. |
-| `collector.py` | Normalizes RouterOS data, limits allowed monitor endpoints, maintains thread-safe live state, and runs traffic/DDM workers. |
+| `collector.py` | Normalizes RouterOS data, maps configurable physical interfaces to stable logical keys, limits allowed monitor endpoints, maintains thread-safe live state, and runs traffic/DDM workers. |
 | `database.py` | Creates the SQLite schema, inserts valid samples, cleans expired rows, calculates raw statistics, and downsamples historical points. |
 | `config.py` | Loads `.env`, applies defaults, and validates positive intervals and minimum retention. |
 | `templates/dashboard.html` | Defines the dashboard's accessible semantic structure. |

@@ -24,6 +24,13 @@ def _positive_float(name: str, default: float) -> float:
     return value
 
 
+def _nonempty_string(name: str, default: str) -> str:
+    value = os.getenv(name, default).strip()
+    if not value:
+        raise ValueError(f"{name} no puede estar vacio")
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     mikrotik_url: str
@@ -35,6 +42,8 @@ class Settings:
     request_timeout: float = 4.0
     database_path: Path = BASE_DIR / "mk_collector.sqlite3"
     device_name: str = "DP-PRUEBAS"
+    customer_interface: str = "ether1"
+    uplink_interface: str = "sfp-sfpplus1"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -56,5 +65,6 @@ class Settings:
             request_timeout=_positive_float("ROUTEROS_TIMEOUT", 4),
             database_path=database_path,
             device_name=os.getenv("DEVICE_NAME", "DP-PRUEBAS"),
+            customer_interface=_nonempty_string("CUSTOMER_INTERFACE", "ether1"),
+            uplink_interface=_nonempty_string("UPLINK_INTERFACE", "sfp-sfpplus1"),
         )
-

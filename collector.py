@@ -97,6 +97,10 @@ class RouterOSClient:
         self.settings = settings
         self.session = session or requests.Session()
         self.session.auth = (settings.mikrotik_user, settings.mikrotik_pass)
+        self.interface_map = {
+            "ether1": settings.customer_interface,
+            "sfp-sfpplus1": settings.uplink_interface,
+        }
 
     def _monitor(self, endpoint: str, payload: dict[str, Any]) -> Any:
         if endpoint not in READ_ONLY_ENDPOINTS:
@@ -110,23 +114,26 @@ class RouterOSClient:
         return response.json()
 
     def traffic(self) -> dict[str, dict[str, Any]]:
+        physical_interfaces = tuple(
+            self.interface_map[interface] for interface in INTERFACES
+        )
         data = self._monitor(
             "interface/monitor-traffic",
-            {"interface": ",".join(INTERFACES), "once": ""},
+            {"interface": ",".join(physical_interfaces), "once": ""},
         )
         if not isinstance(data, list):
             raise ValueError("Respuesta de trafico inesperada")
         by_name = {item.get("name"): item for item in data if isinstance(item, dict)}
         return {
-            interface: normalize_traffic(by_name[interface])
-            for interface in INTERFACES
-            if interface in by_name
+            logical_name: normalize_traffic(by_name[self.interface_map[logical_name]])
+            for logical_name in INTERFACES
+            if self.interface_map[logical_name] in by_name
         }
 
     def ddm(self) -> dict[str, Any] | None:
         data = self._monitor(
             "interface/ethernet/monitor",
-            {"numbers": "sfp-sfpplus1", "once": ""},
+            {"numbers": self.settings.uplink_interface, "once": ""},
         )
         item = data[0] if isinstance(data, list) and data else data
         return normalize_ddm(item) if isinstance(item, dict) and item else None

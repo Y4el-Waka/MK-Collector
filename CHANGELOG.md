@@ -6,6 +6,10 @@ This project follows a simple versioned changelog. Dates are intentionally omitt
 
 ## [Unreleased]
 
+### Changed
+
+- Made physical RouterOS customer and uplink interface names configurable while preserving logical `ether1` and `sfp-sfpplus1` API, SQLite, statistics, and dashboard contracts.
+
 ### Documentation
 
 - Added bilingual English and Spanish project documentation.

@@ -16,8 +16,8 @@ flowchart LR
 
     subgraph ROUTER["MikroTik DP · RouterOS v7"]
         MGMT["Management plane"]
-        ETH["ether1"]
-        SFP["sfp-sfpplus1"]
+        ETH["CUSTOMER_INTERFACE<br/>default: ether1 · logical: ether1"]
+        SFP["UPLINK_INTERFACE<br/>default/logical: sfp-sfpplus1"]
     end
 
     ETH --- CLIENT["Client / customer service"]

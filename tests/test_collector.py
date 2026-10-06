@@ -87,16 +87,65 @@ class RouterClientTests(unittest.TestCase):
     def setUp(self):
         self.settings = Settings("http://router", "collector", "secret", request_timeout=2)
 
-    def test_traffic_uses_read_only_monitor_endpoint(self):
+    def test_default_interfaces_use_read_only_monitor_endpoint(self):
         session = FakeSession(
-            [{"name": "ether1", "rx-bits-per-second": "1000000"}]
+            [
+                {"name": "ether1", "rx-bits-per-second": "1000000"},
+                {"name": "sfp-sfpplus1", "tx-bits-per-second": "2000000"},
+            ]
         )
         client = RouterOSClient(self.settings, session)
         result = client.traffic()
         self.assertEqual(result["ether1"]["rx_mbps"], 1)
+        self.assertEqual(result["sfp-sfpplus1"]["tx_mbps"], 2)
         self.assertTrue(session.calls[0][0].endswith("/rest/interface/monitor-traffic"))
+        self.assertEqual(
+            session.calls[0][1],
+            {"interface": "ether1,sfp-sfpplus1", "once": ""},
+        )
         self.assertEqual(session.calls[0][2], 2)
         self.assertEqual(session.auth, ("collector", "secret"))
+
+    def test_configurable_physical_interfaces_preserve_logical_keys(self):
+        settings = Settings(
+            "http://router",
+            "collector",
+            "secret",
+            customer_interface="ether4",
+            uplink_interface="sfp-uplink",
+        )
+        session = FakeSession(
+            [
+                {"name": "ether4", "rx-bits-per-second": "3000000"},
+                {"name": "sfp-uplink", "tx-bits-per-second": "4000000"},
+            ]
+        )
+        result = RouterOSClient(settings, session).traffic()
+
+        self.assertEqual(
+            session.calls[0][1],
+            {"interface": "ether4,sfp-uplink", "once": ""},
+        )
+        self.assertEqual(result["ether1"]["rx_mbps"], 3)
+        self.assertEqual(result["sfp-sfpplus1"]["tx_mbps"], 4)
+        self.assertNotIn("ether4", result)
+        self.assertNotIn("sfp-uplink", result)
+
+    def test_ddm_uses_configured_uplink_interface(self):
+        settings = Settings(
+            "http://router",
+            "collector",
+            "secret",
+            uplink_interface="sfp-uplink",
+        )
+        session = FakeSession([{"status": "link-ok"}])
+        result = RouterOSClient(settings, session).ddm()
+
+        self.assertEqual(
+            session.calls[0][1],
+            {"numbers": "sfp-uplink", "once": ""},
+        )
+        self.assertEqual(result["status"], "link-ok")
 
     def test_rest_timeout_propagates_without_fabricating_data(self):
         client = RouterOSClient(
